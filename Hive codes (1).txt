@@ -1,0 +1,313 @@
+
+
+
+
+
+CREATE EXTERNAL TABLE IF NOT EXISTS uk_housing_summary (
+    transaction_unique_id STRING, 
+    housing_prices BIGINT, 
+    transfer_date STRING, 
+    property_type STRING, 
+    old_new STRING, 
+    duration STRING, 
+    town_city STRING, 
+    district STRING, 
+    county STRING, 
+    ppd_category STRING
+)
+ROW FORMAT DELIMITED 
+FIELDS TERMINATED BY ',' 
+STORED AS TEXTFILE 
+LOCATION '/user/jcontr185/hive_data/price_paid_data'
+TBLPROPERTIES ('skip.header.line.count'='1');
+
+
+
+
+SELECT town_city, AVG(housing_prices) AS avg_price 
+FROM uk_housing_summary
+GROUP BY town_city
+ORDER BY avg_price DESC
+LIMIT 5;
+
+
+SELECT transaction_unique_id, housing_prices, town_city
+FROM uk_housing_summary
+LIMIT 10;
+
+
+SELECT property_type, COUNT(*) AS count
+FROM uk_housing_summary
+GROUP BY property_type
+ORDER BY count DESC;
+
+
+
+SELECT county, COUNT(*) AS houses_sold FROM uk_housing_summary GROUP BY county   ORDER BY houses_sold DESC;
+
+
+
+SELECT property_type, AVG(housing_prices) AS avg_price From uk_housing_summary GROUP BY property_type ORDER BY avg_price DESC;
+
+
+
+SELECT SUBSTR(transfer_date, 1, 4) AS year, COUNT(*) AS total_transactions FROM 
+
+uk_housing_summary GROUP BY SUBSTR(transfer_date, 1, 4) ORDER BY year;
+
+
+
+SELECT town_city, property_type, AVG(housing_prices) AS avg_price FROM uk_housing_summary 
+
+GROUP BY town_city, property_type ORDER BY avg_price DESC LIMIT 10;
+
+
+SELECT town_city, COUNT(*) AS total_transactions
+FROM uk_housing_summary
+GROUP BY town_city
+ORDER BY total_transactions DESC
+LIMIT 5;
+
+
+
+SELECT  town_city, district, county, housing_prices, transfer_date,  property_type
+FROM uk_housing_summary
+WHERE housing_prices > 5000000
+ORDER BY housing_prices DESC 
+LIMIT 10;
+
+
+
+
+SELECT town_city, ROUND(AVG(housing_prices)) AS avg_price,
+COUNT(*) AS total_sales
+FROM uk_housing_summary
+GROUP BY town_city
+ORDER BY avg_price ASC
+LIMIT 10;
+
+
+
+
+SELECT
+    price_range,
+    COUNT(*) AS sales_count
+FROM (
+    SELECT
+        CASE
+            WHEN housing_prices < 100000 THEN '< £100k'
+            WHEN housing_prices BETWEEN 100000 AND 199999 THEN '£100k - £199k'
+            WHEN housing_prices BETWEEN 200000 AND 299999 THEN '£200k - £299k'
+            WHEN housing_prices BETWEEN 300000 AND 499999 THEN '£300k - £499k'
+            ELSE '£500k+'
+        END AS price_range
+    FROM uk_housing_summary
+    WHERE LOWER(town_city) = 'liverpool'
+      AND housing_prices IS NOT NULL
+) AS subquery
+GROUP BY price_range
+ORDER BY sales_count DESC;
+
+
+
+
+
+SELECT 
+  year(TO_DATE(transfer_date)) AS year,
+  month(TO_DATE(transfer_date)) AS month,
+  ROUND(AVG(housing_prices), 2) AS avg_price
+FROM 
+  uk_housing_summary
+WHERE 
+  transfer_date IS NOT NULL
+GROUP BY 
+  year(TO_DATE(transfer_date)),
+  month(TO_DATE(transfer_date))
+ORDER BY 
+  year, month;
+
+
+
+
+SELECT
+  transaction_unique_id,
+  housing_prices,
+  transfer_date,
+  property_type,
+  town_city,
+  county
+FROM
+  uk_housing_summary
+WHERE
+  town_city = 'LONDON'
+ORDER BY
+  housing_prices DESC
+LIMIT 10;
+
+
+
+
+
+SELECT
+  YEAR(TO_DATE(transfer_date)) AS year,
+  ROUND(AVG(housing_prices), 2) AS avg_price
+FROM
+  uk_housing_summary
+WHERE
+  town_city = 'LONDON'
+  AND transfer_date IS NOT NULL
+GROUP BY
+  YEAR(TO_DATE(transfer_date))
+SORT BY
+  year ASC;
+
+
+
+
+
+INSERT OVERWRITE DIRECTORY '/user/jcontr185/hive_data/monthly_avg_price_geo_full'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT 
+  YEAR(TO_DATE(transfer_date)) AS year,
+  MONTH(TO_DATE(transfer_date)) AS month,
+  town_city,
+  district,
+  county,
+  ROUND(AVG(housing_prices), 2) AS avg_price
+FROM 
+  uk_housing_summary
+WHERE 
+  transfer_date IS NOT NULL
+  AND town_city IS NOT NULL
+  AND district IS NOT NULL
+  AND county IS NOT NULL
+GROUP BY 
+  YEAR(TO_DATE(transfer_date)),
+  MONTH(TO_DATE(transfer_date)),
+  town_city,
+  district,
+  county
+ORDER BY 
+  year, month, county, district, town_city;
+
+
+
+INSERT OVERWRITE DIRECTORY '/user/jcontr185/hive_data/monthly_avg_price_summary'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT 
+  YEAR(TO_DATE(transfer_date)) AS year,
+  MONTH(TO_DATE(transfer_date)) AS month,
+  ROUND(AVG(housing_prices), 2) AS avg_price
+FROM 
+  uk_housing_summary
+WHERE 
+  transfer_date IS NOT NULL
+GROUP BY 
+  YEAR(TO_DATE(transfer_date)),
+  MONTH(TO_DATE(transfer_date))
+ORDER BY 
+  year, month;
+
+
+
+INSERT OVERWRITE DIRECTORY '/user/jcontr185/hive_data/yearly_transaction_summary'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT 
+  SUBSTR(transfer_date, 1, 4) AS year, 
+  COUNT(*) AS total_transactions
+FROM 
+  uk_housing_summary
+GROUP BY 
+  SUBSTR(transfer_date, 1, 4)
+ORDER BY 
+  year;
+
+
+
+INSERT OVERWRITE DIRECTORY '/user/jcontr185/hive_data/county_sales_summary'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT 
+  county, 
+  COUNT(*) AS houses_sold
+FROM 
+  uk_housing_summary
+GROUP BY 
+  county
+ORDER BY 
+  houses_sold DESC;
+
+
+
+INSERT OVERWRITE DIRECTORY '/user/jcontr185/hive_data/london_avg_price_by_year'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT
+  YEAR(TO_DATE(transfer_date)) AS year,
+  ROUND(AVG(housing_prices), 2) AS avg_price
+FROM
+  uk_housing_summary
+WHERE
+  town_city = 'LONDON'
+  AND transfer_date IS NOT NULL
+GROUP BY
+  YEAR(TO_DATE(transfer_date))
+ORDER BY
+  year ASC;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
